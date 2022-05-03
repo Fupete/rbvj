@@ -1,128 +1,126 @@
+function Microphone(_fft) {
 
+  var FFT_SIZE = _fft || 1024;
+  this.spectrum_size = FFT_SIZE / 2;
+  this.spectrum = [];
+  this.volume = this.vol = 0;
+  this.peak_volume = 0;
 
-function Microphone (_fft) {
+  var self = this;
+  var audioContext = new AudioContext();
+  var SAMPLE_RATE = audioContext.sampleRate;
+  window.AudioContext = window.AudioContext || window.webkitAudioContext;
+  navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia;
 
-    var FFT_SIZE = _fft || 1024;
-    this.spectrum_size = FFT_SIZE / 2;
-    this.spectrum = [];
-    this.volume = this.vol = 0;
-    this.peak_volume = 0;
+  //window.addEventListener('load', init, false);
+  init();
 
-    var self = this;
-    var audioContext = new AudioContext();
-    var SAMPLE_RATE = audioContext.sampleRate;
-    window.AudioContext = window.AudioContext || window.webkitAudioContext;
-    navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia;
-
-    window.addEventListener('load', init, false);
-
-    function init () {
-      try {
-        startMic(new AudioContext());
-      }
-      catch (e) {
-        console.error(e);
-        alert('Web Audio API is not supported in this browser');
-      }
+  function init() {
+    try {
+      startMic(new AudioContext());
+    } catch (e) {
+      console.error(e);
+      alert('Web Audio API is not supported in this browser');
     }
+  }
 
 
-    function startMic (context) {
+  function startMic(context) {
 
-      navigator.getUserMedia({ audio: true }, processSound, error);
+    navigator.getUserMedia({ audio: true }, processSound, error);
 
-      function processSound (stream) {
+    function processSound(stream) {
 
-        // analyser extracts frequency, waveform, and other data
-        var analyser = context.createAnalyser();
-        analyser.smoothingTimeConstant = 0.2;
-        analyser.fftSize = FFT_SIZE;
+      // analyser extracts frequency, waveform, and other data
+      var analyser = context.createAnalyser();
+      analyser.smoothingTimeConstant = 0.2;
+      analyser.fftSize = FFT_SIZE;
 
-        var node = context.createScriptProcessor(FFT_SIZE*2, 1, 1);
+      var node = context.createScriptProcessor(FFT_SIZE * 2, 1, 1);
 
-        node.onaudioprocess = function () {
-          // bitcount returns array which is half the FFT_SIZE
-          self.spectrum = new Uint8Array(analyser.frequencyBinCount);
+      node.onaudioprocess = function() {
+        // bitcount returns array which is half the FFT_SIZE
+        self.spectrum = new Uint8Array(analyser.frequencyBinCount);
 
-          // getByteFrequencyData returns the amplitude for each frequency
-          analyser.getByteFrequencyData(self.spectrum);
-          // getByteTimeDomainData gets volumes over the sample time
-          //analyser.getByteTimeDomainData(dataArray);
-          self.vol = self.getRMS(self.spectrum);
-          // get peak
-          if (self.vol > self.peak_volume) self.peak_volume = self.vol;
-          self.volume = self.vol;
-        };
+        // getByteFrequencyData returns the amplitude for each frequency
+        analyser.getByteFrequencyData(self.spectrum);
+        // getByteTimeDomainData gets volumes over the sample time
+        //analyser.getByteTimeDomainData(dataArray);
+        self.vol = self.getRMS(self.spectrum);
+        // get peak
+        if (self.vol > self.peak_volume) self.peak_volume = self.vol;
+        self.volume = self.vol;
+      };
 
-        var input = context.createMediaStreamSource(stream);
+      var input = context.createMediaStreamSource(stream);
 
-        input.connect(analyser);
-        analyser.connect(node);
-        node.connect(context.destination);
-
-      }
-
-      function error () {
-        console.log(arguments);
-      }
+      input.connect(analyser);
+      analyser.connect(node);
+      node.connect(context.destination);
 
     }
 
-    //////// SOUND UTILITIES  ////////
-
-    this.mapSound = function(_me, _total, _min, _max){
-
-      if (self.spectrum.length > 0) {
-
-        var min = _min || 0;
-        var max = _max || 100;
-        //actual new freq
-        var new_freq = Math.round(_me /_total * self.spectrum.length);
-
-        //console.log(Math.round(self.peak_volume) + " : " + Math.round(self.spectrum[new_freq]));
-        // map the volumes to a useful number
-        var s = map(self.spectrum[new_freq], 0, self.peak_volume, min, max);
-        //console.log(s);
-        return s;
-      } else {
-        return 0;
-      }
-
+    function error() {
+      console.log(arguments);
     }
 
+  }
 
-    this.getVol = function(_min, _max){
+  //////// SOUND UTILITIES  ////////
 
-      var min_max = _min || 100;
+  this.mapSound = function(_me, _total, _min, _max) {
+
+    if (self.spectrum.length > 0) {
+
       var min = _min || 0;
+      var max = _max || 100;
+      //actual new freq
+      var new_freq = Math.round(_me / _total * self.spectrum.length);
 
-      var max = _max || min_max;
-
-      // map total volume to 100 for convenience
-      self.volume = map(self.vol, 0, self.peak_volume, min, max);
-      return self.volume || 0;;
+      //console.log(Math.round(self.peak_volume) + " : " + Math.round(self.spectrum[new_freq]));
+      // map the volumes to a useful number
+      var s = map(self.spectrum[new_freq], 0, self.peak_volume, min, max);
+      //console.log(s);
+      return s;
+    } else {
+      return 0;
     }
 
-    this.getVolume = function() { return this.getVol();}
+  }
 
-    //A more accurate way to get overall volume
-    this.getRMS = function (spectrum) {
 
-          var rms = 0;
-          for (var i = 0; i < spectrum.length; i++) {
-            rms += spectrum[i] * spectrum[i];
-          }
-          rms /= spectrum.length;
-          rms = Math.sqrt(rms);
-          return rms;
+  this.getVol = function(_min, _max) {
+
+    var min_max = _min || 100;
+    var min = _min || 0;
+
+    var max = _max || min_max;
+
+    // map total volume to 100 for convenience
+    self.volume = map(self.vol, 0, self.peak_volume, min, max);
+    return self.volume || 0;;
+  }
+
+  this.getVolume = function() { return this.getVol(); }
+
+  //A more accurate way to get overall volume
+  this.getRMS = function(spectrum) {
+
+    var rms = 0;
+    for (var i = 0; i < spectrum.length; i++) {
+      rms += spectrum[i] * spectrum[i];
     }
+    rms /= spectrum.length;
+    rms = Math.sqrt(rms);
+    return rms;
+  }
 
-    //freq = n * SAMPLE_RATE / MY_FFT_SIZE
-    function mapFreq(i){
-      // var freq = i * SAMPLE_RATE / FFT_SIZE;
-      var freq = i * SAMPLE_RATE / self.spectrum.length;
-      return freq;
-    }
+  //freq = n * SAMPLE_RATE / MY_FFT_SIZE
+  function mapFreq(i) {
+    // var freq = i * SAMPLE_RATE / FFT_SIZE;
+    var freq = i * SAMPLE_RATE / self.spectrum.length;
+    return freq;
+  }
 
   // getMix function. Computes the current frequency with
   // computeFreqFromFFT, then returns bass, mids and his
@@ -133,7 +131,7 @@ function Microphone (_fft) {
   // high freq: 4000 > 12000hz
   // Very high freq: 10000 > 20000hz and above
 
-  this.getMix = function(){
+  this.getMix = function() {
     var highs = [];
     var mids = [];
     var bass = [];
@@ -145,43 +143,43 @@ function Microphone (_fft) {
         bass.push(v);
       }
       if (band > 400 && band < 6000) {
-          mids.push(v);
+        mids.push(v);
       }
       if (band > 4000) {
-          highs.push(v);
+        highs.push(v);
       }
     }
-    return {bass: bass, mids: mids, highs: highs}
+    return { bass: bass, mids: mids, highs: highs }
   }
 
 
-  this.getBass = function(){
-          return this.getMix().bass;
-    }
-
-  this.getMids = function(){
-        return this.getMix().mids;
+  this.getBass = function() {
+    return this.getMix().bass;
   }
 
-  this.getHighs = function(){
-        return this.getMix().highs;
+  this.getMids = function() {
+    return this.getMix().mids;
   }
 
-  this.getHighsVol = function(_min, _max){
+  this.getHighs = function() {
+    return this.getMix().highs;
+  }
+
+  this.getHighsVol = function(_min, _max) {
     var min = _min || 0;
     var max = _max || 100;
     var v = map(this.getRMS(this.getMix().highs), 0, self.peak_volume, min, max);
     return v;
   }
 
-  this.getMidsVol = function(_min, _max){
+  this.getMidsVol = function(_min, _max) {
     var min = _min || 0;
     var max = _max || 100;
     var v = map(this.getRMS(this.getMix().mids), 0, self.peak_volume, min, max);
     return v;
   }
 
-  this.getBassVol = function(_min, _max){
+  this.getBassVol = function(_min, _max) {
     var min = _min || 0;
     var max = _max || 100;
     var v = map(this.getRMS(this.getMix().bass), 0, self.peak_volume, min, max);
@@ -190,9 +188,4 @@ function Microphone (_fft) {
 
   return this;
 
-  };
-
-
-
-var Sound = new Microphone();
-console.log(Sound);
+};
